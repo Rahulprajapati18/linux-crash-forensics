@@ -1,0 +1,31 @@
+# Build binaries
+crash_monitor
+crash_test
+normal_test
+evidence_test
+
+# Object files
+*.o
+
+# Core dumps
+core
+core.*
+
+# Kernel module build artifacts
+*.ko
+*.mod
+*.mod.c
+*.symvers
+*.order
+*.cmd
+
+# Runtime state
+logs/*.txt
+
+# Temporary files
+*.swp
+*.swo
+*~
+
+# Generated reports
+reports/*.txt
