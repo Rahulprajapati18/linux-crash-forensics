@@ -29,3 +29,6 @@ logs/*.txt
 
 # Generated reports
 reports/*.txt
+
+# CMake build directory
+build/

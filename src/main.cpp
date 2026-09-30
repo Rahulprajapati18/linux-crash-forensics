@@ -284,6 +284,7 @@ int main(int argc, char* argv[]) {
             << "\n";
     }
 
+    CrashMonInterface::shutdown();
 
     return 0;
 }

@@ -11,7 +11,7 @@ int main() {
 
     std::cout << "========== PROCESS STATUS ==========\n";
 
-    std::cout << EvidenceCollector::getProcessStatus(pid);
+    std::cout << EvidenceCollector::getProcessState(pid);
 
     std::cout << "\n========== COMMAND LINE ==========\n";
 
