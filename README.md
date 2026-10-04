@@ -1,299 +1,185 @@
 # Linux Application Crash Forensics & Automatic Recovery Framework
 
-A Linux-based software framework for detecting application crashes, collecting process evidence, analyzing core dumps with GDB, generating forensic reports, and performing bounded automatic recovery.
+A C++-based Linux system monitoring and crash-analysis framework that detects application crashes, collects process-level evidence, analyzes core dumps using GDB, generates forensic reports, and attempts controlled automatic recovery.
 
-## 1. Project Overview
+---
 
-Application crashes can result in loss of service and make debugging difficult when useful runtime evidence is not preserved.
+## 📌 Project Overview
 
-This project provides an automated crash-forensics workflow that monitors a Linux application and performs the following operations when a crash occurs:
+Applications running on Linux can terminate unexpectedly because of problems such as segmentation faults, illegal instructions, arithmetic exceptions, or abnormal termination.
+
+When an application crashes, simply knowing that it stopped is often not enough. Developers and system administrators need to know:
+
+- What caused the crash?
+- Which signal terminated the process?
+- Which process was affected?
+- What was the process state before the crash?
+- Where exactly did the failure occur?
+- What was the CPU state at the time of failure?
+- Can the application be safely restarted?
+
+This project addresses these problems by providing an automated **crash detection, forensic analysis, reporting, and recovery pipeline**.
+
+---
+
+## 🎯 Problem Statement
+
+Traditional application monitoring can detect that a process has stopped, but it may not provide enough information to understand the failure.
+
+Manual investigation usually requires several separate tools and steps:
 
 ```text
-Application
-     |
-     v
-Crash Detection
-     |
-     v
-Evidence Collection
-     |
-     v
-Core Dump Detection
-     |
-     v
-GDB Analysis
-     |
-     v
-Forensic Report
-     |
-     v
-Crash Recording
-     |
-     v
-Automatic Recovery
+Application Crash
+       ↓
+Find Core Dump
+       ↓
+Run GDB
+       ↓
+Analyze Stack Trace
+       ↓
+Inspect Registers
+       ↓
+Collect Process Information
+       ↓
+Create Report
+       ↓
+Restart Application
 ```
 
-The framework is implemented primarily in **C++** and uses Linux process-management interfaces, the `/proc` filesystem, core dumps, and GDB.
-
-A Linux character-device driver prototype named `crashmon` is also included for future kernel-level integration.
+This project combines these activities into a single automated framework.
 
 ---
 
-## 2. Features
+## 💡 Project Objective
 
-* Linux application process monitoring
-* Crash detection using process status and signals
-* SIGSEGV, SIGABRT, SIGFPE, SIGILL and other signal identification
-* `/proc`-based process evidence collection
-* Core dump detection
-* Automated GDB post-mortem analysis
-* Backtrace collection
-* CPU register collection
-* Timestamped forensic reports
-* Persistent crash-event recording
-* Bounded automatic application recovery
-* Configurable target executable through command-line argument
-* CMake-based build system
-* Git version control
-* Character-device driver prototype
+The main objective is to build a Linux-based framework that can:
+
+1. Monitor a running application.
+2. Detect abnormal process termination.
+3. Identify the crash signal.
+4. Collect process information from `/proc`.
+5. Locate the generated core dump.
+6. Analyze the crash using GDB.
+7. Generate a timestamped forensic report.
+8. Attempt automatic application recovery.
+9. Limit recovery attempts to prevent infinite restart loops.
+10. Provide a foundation for future kernel-level crash monitoring.
 
 ---
 
-## 3. Technologies Used
-
-| Technology       | Purpose                    |
-| ---------------- | -------------------------- |
-| C++17            | Main framework             |
-| Linux/POSIX APIs | Process monitoring         |
-| `/proc`          | Process evidence           |
-| GDB              | Crash analysis             |
-| Core dumps       | Post-crash evidence        |
-| C                | Character-driver prototype |
-| CMake            | Build system               |
-| Git              | Version control            |
-| Ubuntu/WSL2      | Development environment    |
-
----
-
-## 4. Architecture
+## 🏗️ System Architecture
 
 ```text
                     USER / ADMIN
-                         |
-                         v
-                 +---------------+
-                 |  C++ Monitor  |
-                 +-------+-------+
-                         |
-                         v
-              +----------------------+
-              | Crash Forensics      |
-              | Engine               |
-              +----------+-----------+
-                         |
-        +----------------+----------------+
-        |                |                |
-        v                v                v
- Crash Detector   Evidence Collector   GDB Analyzer
-        |                |                |
-        |              /proc              |
-        +----------------+----------------+
-                         |
-                         v
-                  Crash Report
-                         |
-                         v
-                 Recovery Manager
-                         |
-                         v
-                    Restart App
-
-                         |
-                         v
-                 CrashMon Interface
-                         |
-                         v
-                  Driver Prototype
-                         |
-                         v
-                    Linux Kernel
+                         │
+                         ▼
+                  C++ CLI / Monitor
+                         │
+                         ▼
+             Crash Forensics Engine
+        ┌──────────────┬───────────────┐
+        │              │               │
+        ▼              ▼               ▼
+ Crash Detector   Evidence Collector  GDB Analyzer
+        │              │               │
+        │           /proc /sys         │
+        │              │               ▼
+        │              │          Core Dump
+        │              │               │
+        └──────────────┴───────┬───────┘
+                               ▼
+                         Crash Report
+                               │
+                               ▼
+                      Recovery Manager
+                               │
+                               ▼
+                         Restart App
+                               │
+                               ▼
+                     Controlled Recovery
 ```
 
-Detailed architecture and UML documentation are available in:
+### Future Kernel-Level Component
+
+The project also contains a character-driver prototype intended to provide a future kernel/user-space interface:
 
 ```text
-docs/system_architecture.md
-docs/uml_design.md
+User Space
+    │
+    │ read / ioctl
+    ▼
+/dev/crashmon
+    │
+    ▼
+Custom Character Driver
+    │
+    ▼
+Linux Kernel
 ```
+
+The current project uses a **user-space CrashMon interface** for functional testing. The kernel driver source is a prototype and is not currently claimed as a loaded/functional kernel module.
 
 ---
 
-## 5. Project Structure
+## 🔍 How the System Works
+
+### 1. Start Application
+
+The framework launches the target application using Linux process-management functions such as:
 
 ```text
-linux-crash-forensics/
-├── CMakeLists.txt
-├── README.md
-├── .gitignore
-│
-├── driver/
-│   ├── Makefile
-│   └── crashmon.c
-│
-├── include/
-│   ├── crash_detector.hpp
-│   ├── crash_report.hpp
-│   ├── crashmon_interface.hpp
-│   ├── evidence_collector.hpp
-│   ├── gdb_analyzer.hpp
-│   └── recovery_manager.hpp
-│
-├── src/
-│   ├── crash_detector.cpp
-│   ├── crash_report.cpp
-│   ├── crashmon_interface.cpp
-│   ├── evidence_collector.cpp
-│   ├── gdb_analyzer.cpp
-│   ├── main.cpp
-│   └── recovery_manager.cpp
-│
-├── tests/
-│   ├── crash_test.cpp
-│   ├── evidence_test.cpp
-│   └── normal_test.cpp
-│
-└── docs/
-    ├── system_architecture.md
-    ├── uml_design.md
-    ├── git_workflow.md
-    ├── initial_prototype.md
-    └── testing_and_integration.md
+fork()
+exec()
+waitpid()
 ```
 
 ---
 
-## 6. Requirements
+### 2. Collect Pre-Crash Evidence
 
-The following tools are required:
+Before waiting for the application to finish, the framework collects information from Linux `/proc`.
 
-* C++ compiler
-* CMake
-* GDB
-* Linux/WSL2 environment
+Examples include:
 
-For Ubuntu:
+- Process name
+- Parent PID
+- Process state
+- Resident memory usage
+- Virtual memory usage
+- Thread count
+- Command line
 
-```bash
-sudo apt update
-sudo apt install build-essential cmake gdb
-```
-
-Enable core dumps for testing:
-
-```bash
-ulimit -c unlimited
-```
-
----
-
-## 7. Build Using CMake
-
-Clone or enter the project directory:
-
-```bash
-cd ~/linux-crash-forensics
-```
-
-Configure:
-
-```bash
-cmake -S . -B build
-```
-
-Build:
-
-```bash
-cmake --build build -j$(nproc)
-```
-
-The following executables are generated:
+Example:
 
 ```text
-build/crash_monitor
-build/crash_test
-build/normal_test
-build/evidence_test
-```
+========== PRE-CRASH EVIDENCE ==========
 
-The `build/` directory is ignored by Git.
-
----
-
-## 8. Running the Tests
-
-### 8.1 Evidence Collector Test
-
-```bash
-./build/evidence_test
-```
-
-This verifies process-state and command-line information retrieval through `/proc`.
-
-### 8.2 Normal Application Test
-
-```bash
-./build/normal_test
-```
-
-The application should exit normally.
-
-### 8.3 Crash Test Application
-
-```bash
-./build/crash_test
-```
-
-This application intentionally generates a segmentation fault.
-
----
-
-## 9. Running the Crash Monitor
-
-### Monitor the default crash test
-
-```bash
-./build/crash_monitor
-```
-
-The default target is:
-
-```text
-./crash_test
-```
-
-### Monitor a specific executable
-
-```bash
-./build/crash_monitor ./build/crash_test
-```
-
-### Monitor the normal application
-
-```bash
-./build/crash_monitor ./build/normal_test
+Process Name    : crash_test
+Parent PID      : 12345
+Process State   : S (sleeping)
+Memory Usage    : 1892 kB
+Virtual Memory  : 6548 kB
+Threads         : 1
+Command Line    : ./build/crash_test
 ```
 
 ---
 
-## 10. Crash Processing
+### 3. Detect Crash
 
-When the monitored application crashes, the framework performs:
+The framework waits for the child process using:
 
-### Step 1 — Detect Crash
+```cpp
+waitpid()
+```
 
-The framework checks the process termination status using Linux process-status macros.
+It then checks the process status using Linux process-status macros such as:
 
-### Step 2 — Identify Signal
+```cpp
+WIFSIGNALED()
+WTERMSIG()
+```
 
 For example:
 
@@ -301,13 +187,17 @@ For example:
 SIGSEGV - Segmentation Fault
 ```
 
-### Step 3 — Record Crash
+---
 
-The CrashMon interface records the crash count and latest crash event.
+### 4. Locate Core Dump
 
-### Step 4 — Locate Core Dump
+When a process crashes, Linux can generate a **core dump**, which contains a snapshot of the process state at the time of failure.
 
-The framework searches for the corresponding PID-based core dump.
+The framework searches for the corresponding file:
+
+```text
+core.<PID>
+```
 
 Example:
 
@@ -315,245 +205,503 @@ Example:
 core.50596
 ```
 
-### Step 5 — Analyze With GDB
+---
 
-GDB collects:
+### 5. Analyze Core Dump Using GDB
+
+The core dump is passed to GDB together with the executable.
+
+The framework automatically performs analysis such as:
 
 ```text
 bt
 info registers
 ```
 
-### Step 6 — Generate Report
+This provides information including:
 
-A timestamped report is created under:
+- Stack backtrace
+- Crash location
+- Function information
+- CPU register state
 
-```text
-reports/
-```
-
-### Step 7 — Recover
-
-The Recovery Manager attempts to restart the application.
-
-The current maximum is:
+Example:
 
 ```text
-3 attempts
-```
+Program terminated with signal SIGSEGV,
+Segmentation fault.
 
-After three failed attempts, recovery stops.
+#0  main() at tests/crash_test.cpp:11
+
+11      *ptr = 100;
+```
 
 ---
 
-## 11. Example Crash Report
+### 6. Generate Forensic Report
 
-Example report:
-
-```text
-reports/crash_2026-09-30_22-39-54.txt
-```
-
-The report contains information such as:
+The collected information is stored in a timestamped report:
 
 ```text
-Crash Signal     : SIGSEGV - Segmentation Fault
-Signal Number    : 11
-Application      : crash_test
-PID              : 50596
-Memory Usage     : 3984 kB
-Virtual Memory   : 6896 kB
-Threads          : 1
-Command Line     : ./build/crash_test
+reports/crash_YYYY-MM-DD_HH-MM-SS.txt
 ```
 
-GDB identified the crash at:
+A report contains information such as:
 
 ```text
-tests/crash_test.cpp:11
+Crash Signal
+Signal Number
+Application
+PID
+Process State
+Memory Usage
+Thread Count
+Command Line
+Core Dump
+GDB Analysis
+Register Information
 ```
 
-The faulting statement was:
+This provides a persistent record that can be used for debugging and system analysis.
+
+---
+
+### 7. Automatic Recovery
+
+After generating the report, the framework attempts to restart the application.
+
+Recovery is intentionally bounded:
+
+```text
+Recovery attempt 1
+Recovery attempt 2
+Recovery attempt 3
+        ↓
+Maximum attempts reached
+        ↓
+Automatic recovery stopped
+```
+
+This prevents an application that continuously crashes from entering an infinite restart loop.
+
+---
+
+# 🧪 Demonstration
+
+The project includes a deliberately crashing test application:
 
 ```cpp
+int* ptr = nullptr;
 *ptr = 100;
 ```
 
-The report also contains CPU register information.
+This produces a segmentation fault.
+
+The framework detects:
+
+```text
+Signal : SIGSEGV - Segmentation Fault
+```
+
+Then:
+
+```text
+Core   : core.<PID>
+```
+
+GDB analyzes the core dump and identifies the failing source line.
+
+Finally, a forensic report is generated and controlled recovery is attempted.
 
 ---
 
-## 12. Automatic Recovery
+# 🛠️ Technologies Used
 
-The recovery manager uses a bounded retry policy.
+| Technology | Purpose |
+|---|---|
+| **C++17** | Core framework implementation |
+| **Linux** | Target operating system |
+| **CMake** | Build system |
+| **GDB** | Core-dump and crash analysis |
+| **Linux `/proc`** | Process evidence collection |
+| **fork/exec/waitpid** | Process management |
+| **Core Dumps** | Crash-state preservation |
+| **Linux Signals** | Crash detection |
+| **Character Driver (Prototype)** | Future kernel/user-space communication |
+| **Git/GitHub** | Version control and project hosting |
+
+---
+
+# 📂 Project Structure
+
+```text
+linux-crash-forensics/
+│
+├── CMakeLists.txt
+├── README.md
+├── .gitignore
+│
+├── src/
+│   ├── main.cpp
+│   ├── crash_detector.cpp
+│   ├── evidence_collector.cpp
+│   ├── crash_report.cpp
+│   ├── gdb_analyzer.cpp
+│   ├── recovery_manager.cpp
+│   └── crashmon_interface.cpp
+│
+├── include/
+│   ├── crash_detector.hpp
+│   ├── evidence_collector.hpp
+│   ├── crash_report.hpp
+│   ├── gdb_analyzer.hpp
+│   ├── recovery_manager.hpp
+│   └── crashmon_interface.hpp
+│
+├── tests/
+│   ├── crash_test.cpp
+│   ├── normal_test.cpp
+│   └── evidence_test.cpp
+│
+├── driver/
+│   └── crashmon.c
+│
+├── docs/
+│   ├── system_architecture.md
+│   ├── uml_design.md
+│   ├── initial_prototype.md
+│   ├── testing_and_integration.md
+│   └── git_workflow.md
+│
+├── logs/
+│
+├── reports/
+│
+└── build/
+```
+
+---
+
+# 🚀 Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Rahulprajapati18/linux-crash-forensics.git
+cd linux-crash-forensics
+```
+
+### 2. Install Dependencies
+
+Ubuntu/Debian:
+
+```bash
+sudo apt update
+sudo apt install g++ cmake gdb git
+```
+
+### 3. Enable Core Dumps
+
+```bash
+ulimit -c unlimited
+```
+
+Check the core dump configuration:
+
+```bash
+cat /proc/sys/kernel/core_pattern
+```
+
+---
+
+# 🔨 Build the Project
+
+Create the build directory:
+
+```bash
+mkdir -p build
+cd build
+```
+
+Configure:
+
+```bash
+cmake ..
+```
+
+Compile:
+
+```bash
+make -j$(nproc)
+```
+
+The main executable will be:
+
+```text
+build/crash_monitor
+```
+
+---
+
+# ▶️ Running the Project
+
+## Test 1 — Normal Application
+
+Run:
+
+```bash
+./build/crash_monitor ./build/normal_test
+```
+
+Expected behavior:
+
+```text
+Process exited normally
+Exit code: 0
+```
+
+---
+
+## Test 2 — Crash Application
+
+Run:
+
+```bash
+./build/crash_monitor ./build/crash_test
+```
+
+The application intentionally produces a segmentation fault.
+
+The framework should:
+
+```text
+1. Start application
+2. Collect process evidence
+3. Detect SIGSEGV
+4. Locate core dump
+5. Run GDB analysis
+6. Generate crash report
+7. Attempt recovery
+8. Stop after maximum attempts
+```
+
+---
+
+# 🔎 Check Generated Reports
+
+List reports:
+
+```bash
+ls reports/
+```
+
+Open a report:
+
+```bash
+cat reports/crash_*.txt
+```
+
+A report contains the crash information and GDB analysis.
+
+---
+
+# 🧪 Evidence Collector Test
+
+Run:
+
+```bash
+./build/evidence_test
+```
+
+This verifies process information collection through `/proc`.
+
+---
+
+# 🐛 Manual GDB Analysis
+
+The core dump can also be analyzed manually:
+
+```bash
+gdb ./build/crash_test core.<PID>
+```
+
+Inside GDB:
+
+```text
+bt
+```
+
+View registers:
+
+```text
+info registers
+```
+
+Exit:
+
+```text
+quit
+```
+
+The framework automates this analysis so that manual GDB interaction is not required for every crash.
+
+---
+
+# 📊 Supported Crash Signals
+
+The framework currently handles signals including:
+
+| Signal | Meaning |
+|---|---|
+| `SIGSEGV` | Segmentation Fault |
+| `SIGABRT` | Aborted |
+| `SIGFPE` | Arithmetic Exception |
+| `SIGILL` | Illegal Instruction |
+| `SIGTERM` | Terminated |
+| `SIGKILL` | Killed |
+
+---
+
+# 🔐 Recovery Safety
+
+Automatic recovery is intentionally limited.
+
+The current implementation allows a maximum of:
+
+```text
+3 recovery attempts
+```
+
+This design prevents:
 
 ```text
 Crash
-  |
-  v
-Attempt 1
-  |
-  +-- Crash --> Attempt 2
-                  |
-                  +-- Crash --> Attempt 3
-                                  |
-                                  +-- Crash
-                                      |
-                                      v
-                              Stop Recovery
+ ↓
+Restart
+ ↓
+Crash
+ ↓
+Restart
+ ↓
+Crash
+ ↓
+Restart
+ ↓
+∞
 ```
 
-This prevents an application that continuously crashes from being restarted indefinitely.
-
----
-
-## 13. CrashMon Character Driver
-
-The project contains a character-device driver prototype:
+Instead:
 
 ```text
-driver/crashmon.c
+Crash
+ ↓
+Restart × 3
+ ↓
+Stop
+ ↓
+Keep forensic evidence
 ```
 
-The intended device is:
+This makes the recovery mechanism safer for applications that repeatedly fail.
+
+---
+
+# ⚠️ Current Limitations
+
+### 1. Kernel Driver
+
+The `driver/crashmon.c` component is currently a **character-driver prototype**.
+
+The current functional monitoring pipeline uses the user-space CrashMon interface. A loaded `/dev/crashmon` kernel device is not currently part of the tested runtime.
+
+### 2. Core Dump Configuration
+
+Core dumps must be enabled and correctly configured by the Linux environment.
+
+### 3. Pre-Crash Evidence Timing
+
+The framework currently collects evidence shortly after starting the process. Very short-lived applications may exit before all `/proc` information can be collected.
+
+### 4. Recovery Policy
+
+The current recovery mechanism uses a fixed maximum number of restart attempts rather than application-specific recovery policies.
+
+---
+
+# 🔮 Future Enhancements
+
+Possible future improvements include:
+
+- Fully integrate the character device driver with the framework
+- Implement `/dev/crashmon` kernel communication
+- Add `ioctl()`-based kernel/user-space communication
+- Add configurable recovery policies
+- Add crash severity classification
+- Add persistent crash history
+- Add systemd service integration
+- Add resource monitoring before crashes
+- Add a graphical dashboard
+- Add email/notification support
+- Support monitoring multiple applications simultaneously
+- Add more advanced GDB analysis such as thread backtraces and shared-library information
+
+---
+
+# 🎓 Learning Outcomes
+
+This project demonstrates practical knowledge of:
+
+- Linux process management
+- C++ system programming
+- Process creation using `fork()`
+- Program execution using `exec()`
+- Process synchronization using `waitpid()`
+- Linux signals
+- `/proc` filesystem
+- Core dumps
+- GDB debugging
+- Stack backtraces
+- CPU registers
+- File handling
+- CMake
+- Linux character-driver concepts
+- Kernel/user-space communication concepts
+- Automatic recovery mechanisms
+- Git and GitHub workflow
+
+---
+
+# 📌 Project Highlights
 
 ```text
-/dev/crashmon
+✓ Linux-based crash monitoring
+✓ Automatic crash detection
+✓ Signal identification
+✓ Pre-crash process evidence
+✓ Core dump detection
+✓ Automated GDB analysis
+✓ Stack trace collection
+✓ CPU register collection
+✓ Timestamped forensic reports
+✓ Controlled automatic recovery
+✓ C++17 implementation
+✓ CMake build system
+✓ Character-driver prototype
 ```
-
-The prototype implements basic:
-
-```text
-open()
-read()
-write()
-module_init()
-module_exit()
-```
-
-### Current WSL2 Limitation
-
-The project was developed under WSL2. The driver source was prepared and compiled through the external-module compilation stage, but producing a loadable `.ko` module requires complete kernel build artifacts such as `Module.symvers`.
-
-The complete WSL kernel build was not used for the final functional demonstration.
-
-Therefore, the current project should be understood as:
-
-```text
-Character Driver Prototype
-          +
-User-Space CrashMon Interface
-          +
-Functional Crash-Forensics Framework
-```
-
-The project does not claim that `/dev/crashmon` is currently loaded and running as a kernel module.
 
 ---
 
-## 14. Testing Summary
+# 👨‍💻 Author
 
-The framework was tested using both normal and intentionally crashing applications.
+**Rahul Prajapati**
 
-| Test                               | Result |
-| ---------------------------------- | ------ |
-| CMake configuration                | Passed |
-| CMake compilation                  | Passed |
-| Evidence collector                 | Passed |
-| Normal application                 | Passed |
-| Normal application through monitor | Passed |
-| Crash detection                    | Passed |
-| SIGSEGV identification             | Passed |
-| `/proc` evidence collection        | Passed |
-| Core dump detection                | Passed |
-| GDB analysis                       | Passed |
-| Source-line identification         | Passed |
-| Forensic report generation         | Passed |
-| Persistent crash recording         | Passed |
-| Automatic recovery                 | Passed |
-| Recovery limit                     | Passed |
-| End-to-end integration             | Passed |
+B.Tech — Computer Science & Engineering
+
+GitHub:  
+https://github.com/Rahulprajapati18
 
 ---
 
-## 15. Known Limitations
+# 📄 License
 
-1. Very short-lived processes can exit before the current pre-crash evidence collection point.
-2. Core-dump generation depends on system configuration.
-3. GDB must be installed for automated analysis.
-4. Recovery currently uses a maximum of three attempts.
-5. The character driver is currently a prototype and is not loaded in the WSL2 test environment.
-6. Reports are currently stored as text files.
-
----
-
-## 16. Future Enhancements
-
-Potential future improvements include:
-
-* Dynamic process-state monitoring using `waitpid(..., WNOHANG)`
-* Configurable recovery policies
-* More sophisticated crash classification
-* JSON/SQLite report storage
-* Centralized crash history
-* Dashboard for crash statistics
-* Real kernel character-device integration
-* Additional kernel-level crash-event communication
-* Systemd service integration
-* Multi-process monitoring
-
----
-
-## 17. Documentation
-
-Additional project documentation:
-
-```text
-docs/system_architecture.md
-docs/uml_design.md
-docs/git_workflow.md
-docs/initial_prototype.md
-docs/testing_and_integration.md
-```
-
-These documents cover the system architecture, UML design, Git workflow, prototype implementation, testing, integration, and identified improvements.
-
----
-
-## 18. Git Version History
-
-The project uses Git for version control.
-
-Major commits include:
-
-```text
-Initial implementation of Linux crash forensics framework
-Add system architecture and UML design documentation
-Document initial prototype implementation
-Add testing and integration documentation
-Finalize build system and runtime integration
-```
-
-Check history with:
-
-```bash
-git log --oneline
-```
-
-Check repository status with:
-
-```bash
-git status
-```
-
-A clean working tree is expected before final submission.
-
----
-
-## 19. Conclusion
-
-The Linux Application Crash Forensics & Automatic Recovery Framework demonstrates an integrated Linux software-monitoring workflow.
-
-The final prototype can detect application crashes, collect process-level evidence, locate core dumps, perform automated GDB analysis, generate forensic reports, persist crash information, and perform bounded automatic recovery.
-
-The project also establishes a foundation for future kernel-level integration through the included `crashmon` character-driver prototype.
+This project is developed for educational, research, and system-programming purposes.
