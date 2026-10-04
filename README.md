@@ -319,7 +319,7 @@ Finally, a forensic report is generated and controlled recovery is attempted.
 
 | Technology | Purpose |
 |---|---|
-| **C++17** | Core framework implementation |
+| **C++** | Core framework implementation |
 | **Linux** | Target operating system |
 | **CMake** | Build system |
 | **GDB** | Core-dump and crash analysis |
